@@ -10,6 +10,7 @@ import login as backend
 import ddddocr
 
 ocr = ddddocr.DdddOcr(show_ad=False, beta=True)
+ocrDet = ddddocr.DdddOcr(show_ad=False, beta=True, det=True)
 
 
 class account:
@@ -18,6 +19,7 @@ class account:
     account = ""
     password = ""
     isAuto = False
+    type = ""
     cookie = ""
     SMS_CODE = ""
     msg = ""
@@ -26,10 +28,13 @@ class account:
         try:
             self.status = "pending"
             self.account = data.get("id", None)
+            self.type = data.get("type", None)
             self.password = data.get("pw", None)
             self.isAuto = data.get("isAuto", False)
-            if not self.account or not self.password:
-                raise ValueError("账号和密码不能为空")
+            if not self.account:
+                raise ValueError("账号不能为空")
+                if type == "password" and not self.password:
+                    raise ValueError("密码不能为空")
 
             c = str(self.account) + str(self.password)
             self.uid = hashlib.sha256(c.encode("utf-8")).hexdigest()
@@ -67,35 +72,28 @@ def mr(status, **kwargs):
 
 
 # -----router-----
+    
 # 传入账号密码，启动登录线程
 @app.route("/login", methods=["POST"])
 async def login():
+    print("login")
     data = await request.get_json()
-    try:
-        u = account(data)
-    except Exception as e:
-        r = mr("error", msg=str(e))
-        return r
-    # 检测重复提交
-    if workList.get(u.uid):
-        workList[u.uid].SMS_CODE = None
-        r = mr("pass", uid=u.uid, msg=f"{u.account}已经在处理了，请稍后再试")
-        return r
-
-    # 新增记录
-    workList[u.uid] = u
-    # 非阻塞启动登录线程
-    asyncio.create_task(THREAD_DO_LOGIN(workList, u.uid, ocr))
-    # 更新信息，响应api请求
-    workList[u.uid].status = "pending"
-    r = mr("pass", uid=u.uid, msg=f"{u.account}处理中, 到/check查询处理进度")
-    return r
+    if "type" not in data:
+        data["type"] = "password"
+    return loginPublic(data)
+    
+# 启动登录线程
+@app.route("/loginNew", methods=["POST"])
+async def loginNew():
+    print("loginPassword")
+    data = await request.get_json()
+    return loginPublic(data)
 
 
 # 调用后端进行登录
-async def THREAD_DO_LOGIN(workList, uid, ocr):
+async def THREAD_DO_LOGIN(workList, uid, ocr, ocrDet):
     try:
-        await backend.main(workList, uid, ocr)
+        await backend.main(workList, uid, ocr, ocrDet)
     except Exception as e:
         print(e)
         workList[uid].msg = str(e)
@@ -157,7 +155,27 @@ async def sms():
     except Exception as e:
         r = mr("error", msg=str(e))
         return r
+        
+def loginPublic(data):
+    try:
+        u = account(data)
+    except Exception as e:
+        r = mr("error", msg=str(e))
+        return r
+    # 检测重复提交
+    if workList.get(u.uid):
+        workList[u.uid].SMS_CODE = None
+        r = mr("pass", uid=u.uid, msg=f"{u.account}已经在处理了，请稍后再试")
+        return r
 
+    # 新增记录
+    workList[u.uid] = u
+    # 非阻塞启动登录线程
+    asyncio.create_task(THREAD_DO_LOGIN(workList, u.uid, ocr, ocrDet))
+    # 更新信息，响应api请求
+    workList[u.uid].status = "pending"
+    r = mr("pass", uid=u.uid, msg=f"{u.account}处理中, 到/check查询处理进度")
+    return r
 
 def THREAD_SMS(uid, code):
     print("phase THREAD_SMS: " + str(code))
@@ -189,4 +207,5 @@ def delck():
     THREAD_DELCK(uid)
 """
 # 创建本线程的事件循环，运行flask作为第一个任务
+asyncio.new_event_loop().run_until_complete(app.run(host=run_host, port=run_port))
 asyncio.new_event_loop().run_until_complete(app.run(host=run_host, port=run_port))
