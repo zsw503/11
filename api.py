@@ -208,4 +208,3 @@ def delck():
 """
 # 创建本线程的事件循环，运行flask作为第一个任务
 asyncio.new_event_loop().run_until_complete(app.run(host=run_host, port=run_port))
-asyncio.new_event_loop().run_until_complete(app.run(host=run_host, port=run_port))
