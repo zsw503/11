@@ -447,7 +447,7 @@ async def typeuser(page, usernum, passwd):
     await page.waitFor(random.randint(200, 500))
     await page.click(".policy_tip-checkbox")
     await page.waitFor(random.randint(200, 500))
-    await page.click(".btn.J_ping.btn-active")
+    await page.click(".btn.J_ping.active")
     await page.waitFor(random.randint(500, 1000))
 
 
